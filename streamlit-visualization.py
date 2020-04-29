@@ -15,7 +15,6 @@ def main():
     # Lendo os arquivos csv
     df = pd.read_csv('covid-brasil.csv', delimiter=';')
     df_original = df
-    df_world = pd.read_csv('covid_19_clean_complete.csv', delimiter=',', parse_dates=['Date'])
     
     # Montando lista com os estados e regiões
     states = np.append([''], df['estado'].unique())
@@ -88,33 +87,16 @@ def main():
             )
         st.plotly_chart(fig)
 
-        # Trata dados Casos por estado
-        df_estado = pd.DataFrame( { 'casos': df.groupby(['estado'])['casosNovos'].sum(),
-                                    'obtos': df.groupby(['estado'])['obitosNovos'].sum(),
-                                    'porcentagem': (df.groupby(['estado'])['casosNovos'].sum() * 100 / df_original['casosNovos'].sum())}).reset_index()
+        df_state = treatStateData(df, df_original)
 
-        # Letalidade por estado
-        df_estado['letalidade'] = np.round((df_estado['obtos'] / df_estado['casos']) * 100, 2)
-        df_estado['letalidade'] = df_estado['letalidade'].apply(lambda x: str(x) + '%')
-        df_estado['porcentagem'] = np.round(df_estado['porcentagem'], 2)
-        df_estado['porcentagem'] = df_estado['porcentagem'].apply(lambda x: str(x) + '%')
-
-        
-
-       # Trata dados Casos por região
-        df_regiao = pd.DataFrame( { 'casos': df_regiao.groupby(['regiao'])['casosNovos'].sum(), 
-                                'obtos': df_regiao.groupby(['regiao'])['obitosNovos'].sum(),
-                                'porcentagem': (df_regiao.groupby(['regiao'])['casosNovos'].sum() * 100 / df_original['casosNovos'].sum())}).reset_index()
-        df_regiao['letalidade'] = np.round((df_regiao['obtos'] / df_regiao['casos']) * 100, 2)
-        df_regiao['letalidade'] = df_regiao['letalidade'].apply(lambda x: str(x) + '%')
-        df_regiao['porcentagem'] = np.round(df_regiao['porcentagem'], 2)
-        df_regiao['porcentagem'] = df_regiao['porcentagem'].apply(lambda x: str(x) + '%')
-    
+        df_region = treatRegionData(df_regiao, df_original)
+ 
         fig_comapre = None
         pie_fig = None
+
         # Pie Chart
         if selected_region == '' and selected_state == '':
-            pie_fig = px.pie(df_regiao, values='casos', names='regiao', labels={'casos': 'Casos', 'regiao': 'Região'})
+            pie_fig = px.pie(df_region, values='casos', names='regiao', labels={'casos': 'Casos', 'regiao': 'Região'})
             df_trace = df.groupby('data')['casosAcumulados', 'obitosAcumulados'].sum().reset_index()
             fig_comapre = go.Figure()
             trace = []
@@ -133,7 +115,8 @@ def main():
             fig_comapre.add_traces(trace)     
 
         elif selected_state == '':
-            pie_fig = px.pie(df_estado, values='casos', names='estado', labels={'casos': 'Casos', 'estado': 'Estado'})
+
+            pie_fig = px.pie(df_state, values='casos', names='estado', labels={'casos': 'Casos', 'estado': 'Estado'})
             df_trace = df[(df['regiao'] == selected_region)]
             df_trace_group = df_trace.groupby('data')['casosAcumulados', 'obitosAcumulados'].sum().reset_index()
             fig_comapre = go.Figure()
@@ -150,9 +133,7 @@ def main():
                     name= 'Mortes'
                 )
             )
-            fig_comapre.add_traces(trace) 
-
-            
+            fig_comapre.add_traces(trace)         
 
         if pie_fig is not None:
             st.subheader('% de casos:')
@@ -190,23 +171,16 @@ def main():
 
 
         st.subheader('Dados por Estado')
-        st.table(df_estado.sort_values(by=['casos'], ascending=False))
+        st.table(df_state.sort_values(by=['casos'], ascending=False))
         st.subheader('Dados por Região')
-        st.table(df_regiao.sort_values(by=['casos'], ascending=False))
+        st.table(df_region.sort_values(by=['casos'], ascending=False))
 
         
     
     elif dataset_select == 'Mundo':
-        # Input para seleção da região 
-        countries = np.append([''], df_world['Country/Region'].unique())
 
         st.header("Dados do COVID-19 no Mundo")
-        df_world['Active'] = df_world['Confirmed'] - df_world['Deaths'] - df_world['Recovered']
-        # Trocando Mainland China por China
-        df_world['Country/Region'] = df_world['Country/Region'].replace('Mainland China', 'China')
-
-        # Preenchendo missing values
-        df_world[['Province/State']] = df_world[['Province/State']].fillna('')
+        df_world = treatDataFrame()
 
         # Agrupando por data e região
         df_group = df_world.groupby(['Date', 'Country/Region'])['Confirmed', 'Deaths', 'Recovered', 'Active'].sum().reset_index()
@@ -284,7 +258,46 @@ def main():
 
         st.plotly_chart(fig)
 
-       
+
+def treatRegionData(df_regiao, df_original):
+        # Trata dados Casos por região
+        df_region = pd.DataFrame( { 'casos': df_regiao.groupby(['regiao'])['casosNovos'].sum(), 
+                                'obtos': df_regiao.groupby(['regiao'])['obitosNovos'].sum(),
+                                'porcentagem': (df_regiao.groupby(['regiao'])['casosNovos'].sum() * 100 / df_original['casosNovos'].sum())}).reset_index()
+        df_region['letalidade'] = np.round((df_region['obtos'] / df_region['casos']) * 100, 2)
+        df_region['letalidade'] = df_region['letalidade'].apply(lambda x: str(x) + '%')
+        df_region['porcentagem'] = np.round(df_region['porcentagem'], 2)
+        df_region['porcentagem'] = df_region['porcentagem'].apply(lambda x: str(x) + '%')
+
+        return df_region
+    
+
+def treatStateData(df, df_original):
+        # Trata dados Casos por estado
+        df_estado = pd.DataFrame( { 'casos': df.groupby(['estado'])['casosNovos'].sum(),
+                                    'obtos': df.groupby(['estado'])['obitosNovos'].sum(),
+                                    'porcentagem': (df.groupby(['estado'])['casosNovos'].sum() * 100 / df_original['casosNovos'].sum())}).reset_index()
+
+        # Letalidade por estado
+        df_estado['letalidade'] = np.round((df_estado['obtos'] / df_estado['casos']) * 100, 2)
+        df_estado['letalidade'] = df_estado['letalidade'].apply(lambda x: str(x) + '%')
+        df_estado['porcentagem'] = np.round(df_estado['porcentagem'], 2)
+        df_estado['porcentagem'] = df_estado['porcentagem'].apply(lambda x: str(x) + '%')
+
+        return df_estado
+
+def treatDataFrame():
+
+        df_world = pd.read_csv('covid_19_clean_complete.csv', delimiter=',', parse_dates=['Date'])
+        df_world['Active'] = df_world['Confirmed'] - df_world['Deaths'] - df_world['Recovered']
+        # Trocando Mainland China por China
+        df_world['Country/Region'] = df_world['Country/Region'].replace('Mainland China', 'China')
+        # Preenchendo missing values
+        df_world[['Province/State']] = df_world[['Province/State']].fillna('')
+
+        return df_world
+
+
 def defineTraces(df, slider, mode, region, state):
     trace = []
     if region != '' and state == '':
